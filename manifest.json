@@ -5,6 +5,7 @@
     "css": "style.css",
     "author": "virtaava",
     "version": "1.0.0",
+    "homePage": "https://github.com/virtaava/sillytavern-woven-imprint",
     "requires": [],
     "optional": [],
     "auto_update": true

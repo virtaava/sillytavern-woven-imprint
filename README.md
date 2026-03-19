@@ -65,9 +65,11 @@ https://github.com/virtaava/sillytavern-woven-imprint
 
 **Option B: Manual install**
 
-Copy the `extension/` directory:
+Clone this repo into ST's third-party extensions:
+
 ```bash
-cp -r extension/ /path/to/SillyTavern/data/default-user/extensions/woven-imprint/
+cd /path/to/SillyTavern/data/default-user/extensions/third-party/
+git clone https://github.com/virtaava/sillytavern-woven-imprint woven-imprint
 ```
 
 ### 4. Restart SillyTavern
