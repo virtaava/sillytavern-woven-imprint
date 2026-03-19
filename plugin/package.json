@@ -1,0 +1,8 @@
+{
+  "name": "sillytavern-woven-imprint",
+  "version": "1.0.0",
+  "description": "Woven Imprint persistent memory bridge for SillyTavern",
+  "main": "index.js",
+  "author": "virtaava",
+  "license": "Apache-2.0"
+}

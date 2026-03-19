@@ -1,0 +1,11 @@
+{
+    "display_name": "Woven Imprint",
+    "loading_order": 5,
+    "js": "index.js",
+    "css": "style.css",
+    "author": "virtaava",
+    "version": "1.0.0",
+    "requires": [],
+    "optional": [],
+    "auto_update": true
+}

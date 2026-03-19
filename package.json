@@ -1,0 +1,8 @@
+{
+  "name": "sillytavern-woven-imprint",
+  "version": "1.0.0",
+  "description": "Persistent character memory for SillyTavern via woven-imprint",
+  "author": "virtaava",
+  "license": "Apache-2.0",
+  "repository": "https://github.com/virtaava/sillytavern-woven-imprint"
+}
