@@ -11,18 +11,18 @@ SillyTavern (your LLM, your characters)
     │
     ├─ You chat normally — ST handles the LLM as usual
     │
-    ├─ UI Extension: records every message to woven-imprint (async, non-blocking)
+    ├─ UI Extension: records every message to woven-imprint sidecar (async, non-blocking)
     │   └─ woven-imprint extracts facts, updates relationships, stores memories
     │
-    └─ Before each LLM call: extension queries woven-imprint for relevant memories
+    └─ Before each LLM call: extension queries sidecar for relevant memories
         └─ Injects memory context into the prompt (like ST's built-in memory, but persistent)
 ```
 
-SillyTavern keeps full control of your LLM connection. Woven-imprint runs as a sidecar — it only stores and retrieves memories. No extra LLM calls for generation.
+The extension talks directly to the woven-imprint sidecar via HTTP. No server plugin required. SillyTavern keeps full control of your LLM connection.
 
 ## Prerequisites
 
-- [SillyTavern](https://github.com/SillyTavern/SillyTavern) with server plugins enabled (`enableServerPlugins: true` in `config.yaml`)
+- [SillyTavern](https://github.com/SillyTavern/SillyTavern)
 - Python 3.11+
 - An LLM backend configured in woven-imprint (Ollama, OpenAI, etc.) — used only for fact extraction and relationship assessment, not for chat
 
@@ -46,15 +46,7 @@ woven-imprint sidecar --port 8765 --db ~/.woven_imprint/sillytavern.db
 
 The sidecar runs on `http://127.0.0.1:8765` and handles all memory operations.
 
-### 2. Install the server plugin
-
-Copy the `plugin/` directory into SillyTavern's plugins folder:
-
-```bash
-cp -r plugin/ /path/to/SillyTavern/plugins/sillytavern-woven-imprint/
-```
-
-### 3. Install the UI extension
+### 2. Install the extension
 
 **Option A: Install from URL** (recommended)
 
@@ -72,9 +64,11 @@ cd /path/to/SillyTavern/data/default-user/extensions/third-party/
 git clone https://github.com/virtaava/sillytavern-woven-imprint woven-imprint
 ```
 
-### 4. Restart SillyTavern
+### 3. Restart SillyTavern
 
 Restart ST. You should see "Woven Imprint" in the Extensions panel with a green "Connected" indicator.
+
+That's it — two steps. No server plugin, no config.yaml changes.
 
 ## Configuration
 
@@ -83,8 +77,9 @@ In SillyTavern's Extensions panel:
 | Setting | Default | Description |
 |---------|---------|-------------|
 | Enable | On | Toggle persistent memory on/off |
-| Injection depth | 4 | How deep in the chat history to inject memories (lower = closer to latest message) |
-| Max memories | 5 | Maximum number of memories to inject per generation |
+| Sidecar URL | `http://127.0.0.1:8765` | Where the sidecar is running (change if using a different port or remote host) |
+| Injection depth | 2 | How deep in the chat history to inject memories (lower = closer to latest message) |
+| Max memories | 10 | Maximum number of memories to inject per generation |
 
 Environment variables for the sidecar:
 
@@ -107,12 +102,14 @@ All data lives in a local SQLite database. Nothing leaves your machine.
 
 ## Troubleshooting
 
-**"Sidecar not reachable"** — Make sure the sidecar is running: `woven-imprint sidecar --port 8765`
+**"Sidecar unreachable"** — Make sure the sidecar is running: `woven-imprint sidecar --port 8765`
+
+**CORS errors in browser console** — The sidecar sends `Access-Control-Allow-Origin: *` by default. If you see CORS issues, check that nothing is proxying or modifying the sidecar's responses.
 
 **No memory injection happening** — Check that:
 1. The extension is enabled in ST's Extensions panel
-2. Server plugins are enabled in ST's `config.yaml`
-3. The sidecar shows requests in its logs
+2. The sidecar URL in settings matches where the sidecar is actually running
+3. The sidecar shows HTTP requests in its logs
 
 **Characters not being created** — The extension auto-creates a woven-imprint character the first time you chat with an ST character. Check sidecar logs for errors.
 

@@ -6,14 +6,15 @@
  * 2. Inject persistent memory context before generation via setExtensionPrompt()
  * 3. Provide a settings panel with enable/disable, injection depth, max memories
  *
- * All calls go through the server plugin at
- *   /api/plugins/sillytavern-woven-imprint/...
+ * Talks directly to the woven-imprint sidecar (default http://127.0.0.1:8765).
+ * No server plugin required.
  */
 
-const PLUGIN_API = '/api/plugins/sillytavern-woven-imprint';
+const DEFAULT_SIDECAR_URL = 'http://127.0.0.1:8765';
 
 const DEFAULT_SETTINGS = {
     enabled: true,
+    sidecarUrl: DEFAULT_SIDECAR_URL,
     injectionDepth: 2,
     maxMemories: 10,
 };
@@ -25,16 +26,20 @@ let settings = { ...DEFAULT_SETTINGS };
 const knownCharacters = new Set();
 
 // ---------------------------------------------------------------------------
-// Helpers
+// Helpers — direct sidecar calls (no server plugin needed)
 // ---------------------------------------------------------------------------
 
-async function apiGet(path) {
-    const res = await fetch(`${PLUGIN_API}${path}`);
+function getSidecarUrl() {
+    return (settings.sidecarUrl || DEFAULT_SIDECAR_URL).replace(/\/+$/, '');
+}
+
+async function sidecarGet(path) {
+    const res = await fetch(`${getSidecarUrl()}${path}`);
     return res.json();
 }
 
-async function apiPost(path, body) {
-    const res = await fetch(`${PLUGIN_API}${path}`, {
+async function sidecarPost(path, body) {
+    const res = await fetch(`${getSidecarUrl()}${path}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -84,8 +89,9 @@ async function ensureCharacterExists(charName) {
     }
 
     try {
-        const list = await apiGet('/characters');
-        const names = Array.isArray(list) ? list.map(c => c.name || c) : [];
+        const result = await sidecarGet('/characters');
+        const chars = result.characters || result || [];
+        const names = Array.isArray(chars) ? chars.map(c => c.name || c) : [];
         if (names.includes(charName)) {
             knownCharacters.add(charName);
             return;
@@ -94,11 +100,10 @@ async function ensureCharacterExists(charName) {
         // Build a minimal character from the ST card
         const ctx = SillyTavern.getContext();
         const card = ctx.characters[ctx.characterId];
-        await apiPost('/characters', {
+        await sidecarPost('/characters', {
             name: charName,
-            description: card?.description || '',
+            persona: card?.description || '',
             personality: card?.personality || '',
-            scenario: card?.scenario || '',
         });
         knownCharacters.add(charName);
     } catch (err) {
@@ -116,10 +121,11 @@ function recordMessage(role, content) {
     if (!charName) return;
 
     // Fire and forget — errors are swallowed
-    apiPost('/record', {
-        character: charName,
+    sidecarPost('/record', {
+        character_id: charName,
         role,
         content,
+        user_id: 'st_user',
     }).catch(err => {
         console.warn('[Woven Imprint] Record failed (non-fatal):', err);
     });
@@ -142,8 +148,8 @@ async function injectMemoryContext() {
     try {
         await ensureCharacterExists(charName);
 
-        const memData = await apiGet(
-            `/memory?character=${encodeURIComponent(charName)}&limit=${settings.maxMemories}`
+        const memData = await sidecarGet(
+            `/memory?character_id=${encodeURIComponent(charName)}&user_id=st_user&query=recent&limit=${settings.maxMemories}`
         );
 
         const memoryContext = memData.context || '';
@@ -183,17 +189,17 @@ async function checkSidecarStatus() {
     if (!indicator || !label) return;
 
     try {
-        const result = await apiGet('/health');
-        if (result.ok) {
+        const result = await sidecarGet('/health');
+        if (result.status === 'ok') {
             indicator.className = 'wi-status-dot wi-status-ok';
-            label.textContent = 'Connected';
+            label.textContent = `Connected (v${result.version || '?'})`;
         } else {
             indicator.className = 'wi-status-dot wi-status-err';
-            label.textContent = result.error || 'Disconnected';
+            label.textContent = 'Unexpected response';
         }
     } catch {
         indicator.className = 'wi-status-dot wi-status-err';
-        label.textContent = 'Unreachable';
+        label.textContent = 'Unreachable — run: woven-imprint sidecar';
     }
 }
 
@@ -224,6 +230,11 @@ function createSettingsPanel() {
                     <span>Enable memory injection</span>
                 </label>
                 <div class="wi-setting-row">
+                    <label for="wi-sidecar-url">Sidecar URL</label>
+                    <input id="wi-sidecar-url" type="text" class="text_pole"
+                           value="${settings.sidecarUrl}" placeholder="${DEFAULT_SIDECAR_URL}">
+                </div>
+                <div class="wi-setting-row">
                     <label for="wi-depth">Injection depth</label>
                     <input id="wi-depth" type="range" min="0" max="10" step="1"
                            value="${settings.injectionDepth}">
@@ -248,6 +259,12 @@ function createSettingsPanel() {
     document.getElementById('wi-enabled')?.addEventListener('change', (e) => {
         settings.enabled = e.target.checked;
         saveSettings();
+    });
+
+    document.getElementById('wi-sidecar-url')?.addEventListener('change', (e) => {
+        settings.sidecarUrl = e.target.value.trim() || DEFAULT_SIDECAR_URL;
+        saveSettings();
+        checkSidecarStatus();
     });
 
     document.getElementById('wi-depth')?.addEventListener('input', (e) => {
@@ -296,7 +313,6 @@ function createSettingsPanel() {
 
     // Pre-load memory when chat changes
     ctx.eventSource.on(ctx.eventTypes.CHAT_CHANGED, () => {
-        // Reset known characters on chat change to re-check
         knownCharacters.clear();
         injectMemoryContext();
     });
@@ -306,5 +322,5 @@ function createSettingsPanel() {
         injectMemoryContext();
     });
 
-    console.log('[Woven Imprint] Extension loaded');
+    console.log('[Woven Imprint] Extension loaded — sidecar:', getSidecarUrl());
 })();
